@@ -4,6 +4,16 @@
 # custom
 .flatpak-builder/
 .import/
-[Aa]ndroid/
+#[Aa]ndroid/
 [Ee]xport/*/
 [Ee]xport/_mac*
+
+# AAOS
+*.apk
+media/image/UI/Keys.png.import
+# 1. Ignore everything inside the build folder
+[Aa]ndroid/build/*
+# 2. But do not ignore the subdirectories if they contain the file (crucial for nesting)
+#![Aa]ndroid/build/**/
+# 3. Explicitly include the specific file
+![Aa]ndroid/build/AndroidManifest.xml
