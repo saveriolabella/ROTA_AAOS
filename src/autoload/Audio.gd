@@ -1,5 +1,6 @@
 extends Node
 
+signal audio_focus_state_changed(is_muted, is_enabled)
 const DEBUG_AUDIO_FOCUS := true
 
 export var is_refresh := false setget set_refresh
@@ -16,6 +17,7 @@ var wait_clock := 0.0
 var wait_time := 10.0
 var music_ease := EaseMover.new(1.0, -1)
 var android_audio_focus_plugin = null
+var is_audio_focus_muted := false
 
 func af_log(msg := ""):
 	if DEBUG_AUDIO_FOCUS:
@@ -30,10 +32,12 @@ func _ready():
 	af_log("_ready() os=" + OS.get_name())
 	
 	if OS.get_name() == "Android":
-		var granted := request_android_audio_focus()
-		af_log("initial request_audio_focus granted=" + str(granted))
-		if !granted:
-			push_warning("Android audio focus was not granted.")
+		bind_android_audio_focus_signal()
+		if should_handle_audio_focus():
+			var granted := request_android_audio_focus()
+			af_log("initial request_audio_focus granted=" + str(granted))
+			if !granted:
+				push_warning("Android audio focus was not granted.")
 
 func play(arg = "menu_cursor", from := 1.0, to := -1.0, pos := 0.0):
 	if arg is String and dict.has(arg):
@@ -125,6 +129,56 @@ func abandon_android_audio_focus() -> void:
 	var released = audio_focus.abandon_audio_focus()
 	af_log("abandon_audio_focus result=" + str(released))
 
+func bind_android_audio_focus_signal() -> void:
+	var audio_focus = get_android_audio_focus_singleton()
+
+	if audio_focus == null:
+		af_log("bind signal skipped (singleton null)")
+		return
+
+	if audio_focus.has_signal("focus_changed") and !audio_focus.is_connected("focus_changed", self, "_on_android_audio_focus_changed"):
+		audio_focus.connect("focus_changed", self, "_on_android_audio_focus_changed")
+		af_log("connected focus_changed signal")
+	else:
+		af_log("focus_changed missing or already connected")
+
+func _set_all_audio_muted(arg := false) -> void:
+	for i in range(AudioServer.get_bus_count()):
+		AudioServer.set_bus_mute(i, arg)
+
+func should_handle_audio_focus() -> bool:
+	return OS.get_name() == "Android" and get_android_audio_focus_singleton() != null
+
+func set_audio_focus_muted(arg := is_audio_focus_muted) -> void:
+	is_audio_focus_muted = bool(arg)
+	af_log("set_audio_focus_muted -> " + str(is_audio_focus_muted))
+	_set_all_audio_muted(is_audio_focus_muted)
+	emit_signal("audio_focus_state_changed", is_audio_focus_muted, should_handle_audio_focus())
+
+func _on_android_audio_focus_changed(focus_change : int) -> void:
+	af_log("focus_changed signal value=" + str(focus_change))
+
+	if focus_change == 1:
+		set_audio_focus_muted(false)
+	elif focus_change < 0:
+		set_audio_focus_muted(true)
+
+func handle_audio_focus_icon_pressed() -> void:
+	af_log("icon pressed muted=" + str(is_audio_focus_muted) + " enabled=" + str(should_handle_audio_focus()))
+	if !should_handle_audio_focus():
+		af_log("icon press ignored (handling disabled)")
+		return
+
+	if is_audio_focus_muted:
+		var granted := request_android_audio_focus()
+		af_log("icon request_audio_focus granted=" + str(granted))
+		if granted:
+			set_audio_focus_muted(false)
+	else:
+		set_audio_focus_muted(true)
+		af_log("icon abandon_audio_focus()")
+		abandon_android_audio_focus()
+
 func _notification(what):
 	match what:
 		MainLoop.NOTIFICATION_APP_PAUSED:
@@ -134,10 +188,12 @@ func _notification(what):
 
 		MainLoop.NOTIFICATION_APP_RESUMED:
 			# Android onResume: The app is brought back to the foreground
-			var granted := request_android_audio_focus()
-			af_log("NOTIFICATION_APP_RESUMED request_audio_focus granted=" + str(granted))
-			if !granted:
-				push_warning("Android audio focus was not granted.")
+			if should_handle_audio_focus():
+				bind_android_audio_focus_signal()
+				var granted := request_android_audio_focus()
+				af_log("NOTIFICATION_APP_RESUMED request_audio_focus granted=" + str(granted))
+				if !granted:
+					push_warning("Android audio focus was not granted.")
 
 		MainLoop.NOTIFICATION_WM_GO_BACK_REQUEST:
 			# The back button was pressed
