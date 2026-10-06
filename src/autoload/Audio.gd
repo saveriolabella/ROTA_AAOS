@@ -1,5 +1,7 @@
 extends Node
 
+const DEBUG_AUDIO_FOCUS := true
+
 export var is_refresh := false setget set_refresh
 
 var dict = {}
@@ -13,6 +15,11 @@ export var wait_range := Vector2(10, 90)
 var wait_clock := 0.0
 var wait_time := 10.0
 var music_ease := EaseMover.new(1.0, -1)
+var android_audio_focus_plugin = null
+
+func af_log(msg := ""):
+	if DEBUG_AUDIO_FOCUS:
+		print("[AudioFocus] ", msg)
 
 func _ready():
 	music_player.connect("finished", self, "music_finished")
@@ -20,6 +27,13 @@ func _ready():
 	
 	randomize()
 	wait_clock = 4.0
+	af_log("_ready() os=" + OS.get_name())
+	
+	if OS.get_name() == "Android":
+		var granted := request_android_audio_focus()
+		af_log("initial request_audio_focus granted=" + str(granted))
+		if !granted:
+			push_warning("Android audio focus was not granted.")
 
 func play(arg = "menu_cursor", from := 1.0, to := -1.0, pos := 0.0):
 	if arg is String and dict.has(arg):
@@ -68,3 +82,70 @@ func set_refresh(arg := false):
 			dict[str(get_path_to(i)).to_lower().replace("/", "_")] = i
 	
 	print("Audio.dict refresh: ", dict.keys())
+
+func get_android_audio_focus_singleton():
+	if android_audio_focus_plugin != null:
+		return android_audio_focus_plugin
+
+	if Engine.has_singleton("RotaAudioFocusPlugin"):
+		android_audio_focus_plugin = Engine.get_singleton("RotaAudioFocusPlugin")
+		af_log("singleton acquired via name='RotaAudioFocusPlugin': " + str(android_audio_focus_plugin))
+		return android_audio_focus_plugin
+
+	af_log("Engine singleton RotaAudioFocusPlugin not found")
+	return android_audio_focus_plugin
+
+func request_android_audio_focus() -> bool:
+	if OS.get_name() != "Android":
+		af_log("request_audio_focus bypass (non-Android)")
+		return true
+
+	var audio_focus = get_android_audio_focus_singleton()
+
+	if audio_focus == null:
+		push_warning("RotaAudioFocusPlugin Android plugin is not available.")
+		af_log("request_audio_focus failed (singleton null)")
+		return false
+
+	var granted = audio_focus.request_audio_focus()
+	af_log("request_audio_focus result=" + str(granted))
+	return granted
+
+func abandon_android_audio_focus() -> void:
+	if OS.get_name() != "Android":
+		af_log("abandon_audio_focus bypass (non-Android)")
+		return
+
+	var audio_focus = get_android_audio_focus_singleton()
+
+	if audio_focus == null:
+		af_log("abandon_audio_focus skipped (singleton null)")
+		return
+
+	var released = audio_focus.abandon_audio_focus()
+	af_log("abandon_audio_focus result=" + str(released))
+
+func _notification(what):
+	match what:
+		MainLoop.NOTIFICATION_APP_PAUSED:
+			# Android onPause / onStop: The app is minimized
+			af_log("NOTIFICATION_APP_PAUSED abandoing audio focus")
+			abandon_android_audio_focus()
+
+		MainLoop.NOTIFICATION_APP_RESUMED:
+			# Android onResume: The app is brought back to the foreground
+			var granted := request_android_audio_focus()
+			af_log("NOTIFICATION_APP_RESUMED request_audio_focus granted=" + str(granted))
+			if !granted:
+				push_warning("Android audio focus was not granted.")
+
+		MainLoop.NOTIFICATION_WM_GO_BACK_REQUEST:
+			# The back button was pressed
+			af_log("NOTIFICATION_WM_GO_BACK_REQUEST abandoing audio focus")
+			abandon_android_audio_focus()
+
+		MainLoop.NOTIFICATION_WM_QUIT_REQUEST:
+			# The back button was pressed
+			af_log("NOTIFICATION_WM_QUIT_REQUEST abandoing audio focus")
+			abandon_android_audio_focus()	
+			get_tree().quit()

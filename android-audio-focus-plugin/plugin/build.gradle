@@ -1,0 +1,38 @@
+plugins {
+    id 'com.android.library'
+}
+
+android {
+    namespace 'com.harmonyhoney.audiofocus'
+    compileSdk 34
+
+    defaultConfig {
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName '1.0'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+    implementation 'androidx.annotation:annotation-jvm:1.10.0'
+
+    // Place the Godot 3.6.1 library here:
+    // plugin/libs/godot-lib.3.6.1.stable.aar
+    compileOnly files('libs/godot-lib.3.6.1.stable.release.aar')
+}
+
+tasks.register('exportRotaAudioFocusReleaseAar', Copy) {
+    from(layout.buildDirectory.file('outputs/aar/plugin-release.aar'))
+    into(layout.buildDirectory.dir('outputs/aar'))
+    rename { 'RotaAudioFocusPlugin.release.aar' }
+}
+
+tasks.matching { it.name == 'assembleRelease' }.configureEach {
+    finalizedBy(tasks.named('exportRotaAudioFocusReleaseAar'))
+}

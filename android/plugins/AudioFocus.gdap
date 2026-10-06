@@ -1,0 +1,8 @@
+[config]
+
+name="RotaAudioFocusPlugin"
+binary_type="local"
+binary="RotaAudioFocusPlugin.release.aar"
+
+[dependencies]
+local=[]
