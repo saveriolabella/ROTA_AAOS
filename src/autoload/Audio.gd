@@ -18,6 +18,7 @@ var wait_time := 10.0
 var music_ease := EaseMover.new(1.0, -1)
 var android_audio_focus_plugin = null
 var is_audio_focus_muted := false
+var is_audio_focus_user_muted := false
 
 func af_log(msg := ""):
 	if DEBUG_AUDIO_FOCUS:
@@ -158,7 +159,7 @@ func set_audio_focus_muted(arg := is_audio_focus_muted) -> void:
 func _on_android_audio_focus_changed(focus_change : int) -> void:
 	af_log("focus_changed signal value=" + str(focus_change))
 
-	if focus_change == 1:
+	if focus_change == 1 and !is_audio_focus_user_muted:
 		set_audio_focus_muted(false)
 	elif focus_change < 0:
 		set_audio_focus_muted(true)
@@ -170,11 +171,17 @@ func handle_audio_focus_icon_pressed() -> void:
 		return
 
 	if is_audio_focus_muted:
-		var granted := request_android_audio_focus()
-		af_log("icon request_audio_focus granted=" + str(granted))
-		if granted:
+		is_audio_focus_user_muted = false
+		if Shared.allow_concurrent_playback:
+			af_log("icon unmute without requesting audio focus")
 			set_audio_focus_muted(false)
+		else:
+			var granted := request_android_audio_focus()
+			af_log("icon request_audio_focus granted=" + str(granted))
+			if granted:
+				set_audio_focus_muted(false)
 	else:
+		is_audio_focus_user_muted = true
 		set_audio_focus_muted(true)
 		af_log("icon abandon_audio_focus()")
 		abandon_android_audio_focus()

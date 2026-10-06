@@ -125,6 +125,7 @@ var shadow_buffer := 2 setget set_shadow_buffer
 var is_weather := true setget set_is_weather
 var is_interpolate := true setget set_is_interpolate
 var is_touch := false setget set_is_touch
+var allow_concurrent_playback := false
 
 var is_demo := false
 
@@ -707,6 +708,7 @@ func save_options():
 	o["clock_alpha"] = float(clock_alpha)
 	o["clock_decimals"] = int(clock_decimals)
 	o["is_touch"] = int(is_touch)
+	o["allow_concurrent_playback"] = int(allow_concurrent_playback)
 	
 	file_save_json("user://options.json", o)
 	
@@ -755,6 +757,8 @@ func load_options():
 		clock_decimals = int(d["clock_decimals"])
 	if d.has("is_touch"):
 		is_touch = bool(d["is_touch"])
+	if d.has("allow_concurrent_playback"):
+		allow_concurrent_playback = bool(d["allow_concurrent_playback"])
 
 func save_keys(path := "user://keys.tres"):
 	var s_keys = SaveDict.new()
